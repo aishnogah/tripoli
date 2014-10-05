@@ -1,3 +1,14 @@
+# Xcode directories and 3rd party dependencies
+tripoli.xcodeproj/
+.idea/
+openfst-include/
+openfst-lib/
+
+# Apple crap
+.DS_Store
+.AppleDouble
+.LSOverride
+
 # Compiled Object files
 *.slo
 *.lo
@@ -27,9 +38,4 @@
 *.out
 *.app
 
-.DS_Store
-.AppleDouble
-.LSOverride
 
-tripoli.xcodeproj/
-.idea/
