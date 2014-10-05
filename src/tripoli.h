@@ -5,6 +5,7 @@
 #define TRIPOLI_TRIPOLI_H__
 
 #include <cstring>
+#include <string>
 #include <stdexcept>
 #include <algorithm>
 #include <unordered_map>
@@ -13,8 +14,9 @@
 #include <utility>
 #include <tuple>
 #include <vector>
+#include <memory>
 
-
+using std::string;
 using std::invalid_argument;
 using std::unordered_map;
 using std::unordered_set;
@@ -22,6 +24,7 @@ using std::pair;
 using std::make_pair;
 using std::tuple;
 using std::vector;
+using std::unique_ptr;
 
 #include <fst/fst.h>
 #include <fst/mutable-fst.h>
@@ -44,22 +47,23 @@ typedef vector<Symbol> Rule;  // grammar rule
 
 const int64 kNoRuleId   =  -1;  // Not a valid rule ID
 
-    
 template <class W>
 class RuleArc : public ArcTpl<W> {
 public:
-  RuleArc(Label i, Label o, const W& w, StateId s, RuleId r) : ArcTpl<W>(i, o, w, s), rule(r) {}
+  RuleArc(Label i, Label o, const W& w, StateId s, RuleId r = -1)
+          : ArcTpl<W>(i, o, w, s), rule(r) {}
   RuleId rule;
 };
 
+enum ReachType {
+  REACH_UNKNOWN,
+  REACH_YES,
+  REACH_NO = 0
+};
 
-enum ReachType { REACH_UNKNOWN,
-                 REACH_YES,
-                 REACH_NO = 0};
-
-class GrammarInfo {
+class Grammar {
 public:
-  GrammarInfo(Symbol max_term, Symbol max_preterm, Symbol max_nonterm,
+  Grammar(Symbol max_term, Symbol max_preterm, Symbol max_nonterm,
               vector<Rule> rules = vector<Rule>(), vector<Symbol> labels_to_symbols = vector<Symbol>())
           : max_term_(max_term), max_preterm_(max_preterm), max_nonterm_(max_nonterm),
             labels_to_symbols_(labels_to_symbols) {
@@ -77,77 +81,6 @@ public:
       Symbol t = ToTerm(pt);
       symbol_reach_[pt][t] = REACH_YES;
     }
-  }
-
-  static GrammarInfo *Read(const string symbolfile, const string rulefile, const string labelfile) {
-    Symbol max_term;
-    Symbol max_preterm;
-    Symbol max_nonterm;
-    vector<Rule> rules;
-    vector<Symbol> labels_to_symbols;
-    if (!ReadIntVectors(rulefile, &rules))
-      invalid_argument("cannot read rule file");
-    if (!ReadSymbolFile(symbolfile, &max_term, &max_preterm, &max_nonterm))
-      invalid_argument("cannot read grammar-symbols file");
-    if (!ReadLabelFile(labelfile, &labels_to_symbols, max_term))
-      invalid_argument("cannot read labels file");
-    return new GrammarInfo(max_term, max_preterm, max_nonterm, rules, labels_to_symbols);
-  }
-
-  static bool ReadSymbolFile(const string& filename, Symbol *max_term,
-                      Symbol *max_preterm, Symbol *max_nonterm) {
-    vector<string> symbols;
-    ReadNumberedStrings(filename, &symbols);
-    bool in_preterms = false;
-    bool in_nonterms = false;
-    size_t i = 1;
-    for (; i < symbols.size(); ++i) {
-      string sym = symbols[i];
-      if (sym[0] == '_') {
-        if (!in_preterms && !in_nonterms) {
-          *max_term = i - 1;
-          in_preterms = true;
-        }
-        if (!in_preterms)
-          return false;
-        if (strcmp(sym.c_str() + 1, symbols[i - *max_term].c_str()))
-          return false;
-      }
-      else if (in_preterms) {
-        *max_preterm = i - 1;
-        in_preterms = false;
-        in_nonterms = true;
-      }
-    }
-    if (in_nonterms) {
-      *max_nonterm = i;
-      return true;
-    }
-    return false;
-  }
-
-  static bool ReadLabelFile(const string& filename, vector<Symbol> *labels_to_symbols, const Symbol max_term) {
-    vector<string> labels;
-    ReadNumberedStrings(filename, &labels);
-    labels_to_symbols->push_back(-1);
-    for (size_t i = 1; i < labels.size(); ++i) {
-      string label = labels[i];
-      if (label[0] != '+' && label[0] != '-') {
-        if (i > max_term)
-          return false;
-        labels_to_symbols->push_back(i);
-      }
-      else {
-        if (i <= max_term) return false;
-        char *sym_str = strpbrk(label.c_str(), "P");
-        if (!sym_str) return false;
-        bool err;
-        Symbol sym = StrToInt64(sym_str, filename, i, false, &err);
-        if (err) return false;
-        labels_to_symbols->push_back(sym);
-      }
-    }
-    return true;
   }
 
   bool IsTerm(Symbol s) { return s > 0 && s <= max_term_; }
@@ -235,16 +168,183 @@ private:
   // replacement_symbols_[s] is a vector of symbols which appear as the left-most symbol of the RHS of a production from s
 };
 
+bool ReadSymbolFile(const string& filename, Symbol *max_term,
+        Symbol *max_preterm, Symbol *max_nonterm) {
+  vector<string> symbols;
+  ReadNumberedStrings(filename, &symbols);
+  bool in_preterms = false;
+  bool in_nonterms = false;
+  size_t i = 1;
+  for (; i < symbols.size(); ++i) {
+    string sym = symbols[i];
+    if (sym[0] == '_') {
+      if (!in_preterms && !in_nonterms) {
+        *max_term = i - 1;
+        in_preterms = true;
+      }
+      if (!in_preterms)
+        return false;
+      if (strcmp(sym.c_str() + 1, symbols[i - *max_term].c_str()))
+        return false;
+    }
+    else if (in_preterms) {
+      *max_preterm = i - 1;
+      in_preterms = false;
+      in_nonterms = true;
+    }
+  }
+  if (in_nonterms) {
+    *max_nonterm = i;
+    return true;
+  }
+  return false;
+}
+
+bool ReadLabelFile(const string& filename, vector<Symbol> *labels_to_symbols, const Symbol max_term) {
+  vector<string> labels;
+  ReadNumberedStrings(filename, &labels);
+  labels_to_symbols->push_back(-1);
+  for (size_t i = 1; i < labels.size(); ++i) {
+    string label = labels[i];
+    if (label[0] != '+' && label[0] != '-') {
+      if (i > max_term)
+        return false;
+      labels_to_symbols->push_back(i);
+    }
+    else {
+      if (i <= max_term) return false;
+      char *sym_str = strpbrk(label.c_str(), "P");
+      if (!sym_str) return false;
+      bool err;
+      Symbol sym = StrToInt64(sym_str, filename, i, false, &err);
+      if (err) return false;
+      labels_to_symbols->push_back(sym);
+    }
+  }
+  return true;
+}
+
+Grammar *ReadGrammar(const string symbolfile, const string rulefile, const string labelfile) {
+  Symbol max_term;
+  Symbol max_preterm;
+  Symbol max_nonterm;
+  vector<Rule> rules;
+  vector<Symbol> labels_to_symbols;
+  if (!ReadIntVectors(rulefile, &rules))
+    invalid_argument("cannot read rule file");
+  if (!ReadSymbolFile(symbolfile, &max_term, &max_preterm, &max_nonterm))
+    invalid_argument("cannot read grammar-symbols file");
+  if (!ReadLabelFile(labelfile, &labels_to_symbols, max_term))
+    invalid_argument("cannot read labels file");
+  return new Grammar(max_term, max_preterm, max_nonterm, rules, labels_to_symbols);
+}
+
+enum StateTag {
+  TRIGRAM_STATE,
+  BIGRAM_STATE,
+  UNIGRAM_STATE,
+  DUMMY_STATE,
+  PORTAL_STATE
+};
+
+struct StateInfo {
+  StateTag tag;
+  Symbol fst;
+  Symbol snd;
+};
+
+
+template <class F>
+class PDTInfo {
+public:
+  typedef F PDT;
+  typedef typename PDT::A Arc;
+  typedef typename Arc::W Weight;
+
+  PDTInfo(Grammar &grammar, PDT &pdt, vector<StateInfo> &state_info)
+          : grammar_(grammar),
+            pdt_(pdt),
+            state_info_(state_info) {
+
+    StateId state = 0;
+    for (vector<StateInfo>::const_iterator it = state_info.begin();
+         it != state_info.end();
+         ++it, ++state) {
+      StateInfo si = *it;
+
+      switch (si.tag) {
+        case TRIGRAM_STATE:
+          if (!(grammar_.IsTerm(si.fst) && grammar_.IsTerm(si.snd)))
+            invalid_argument("invalid StateInfo for trigram state: " + itoa(state));
+          collect_rules(state);
+          break;
+
+        case BIGRAM_STATE:
+          if (!(grammar_.IsTerm(si.fst) && si.snd == 0))
+            invalid_argument("invalid StateInfo for bigram state: " + itoa(state));
+          collect_rules(state);
+          break;
+
+        case UNIGRAM_STATE:
+          if (!(si.fst == 0 && si.snd == 0))
+            invalid_argument("invalid StateInfo for unigram state: " + itoa(state));
+          collect_unigram_rules(state);
+          break;
+
+        case DUMMY_STATE:
+          if (!(si.fst == 0 && si.snd == 0))
+            invalid_argument("invalid StateInfo for dummy state: " + itoa(state));
+          break;
+        case PORTAL_STATE:
+          if (!(si.fst == 0 && si.snd == 0))
+            invalid_argument("invalid StateInfo for portal state: " + itoa(state));
+      }
+      state_index_[state] = si;
+    }
+  }
+
+private:
+
+  void collect_rules(StateId s) {
+    set<RuleId> &rules = seen_rules_[s]
+    for (ArcIterator<PDT> aiter(pdt_, s);
+         !aiter.Done();
+         aiter.Next()) {
+      Arc &arc = aiter.Value();
+      rules.insert(arc.rule);
+    }
+  }
+
+  void collect_unigram_rules(StateId s) {
+    for (ArcIterator<PDT> aiter(pdt_, s);
+         !aiter.Done();
+         aiter.Next()) {
+      Arc &arc = aiter.Value();
+      Label label = arc.ilabel;
+      if (label == 0)
+        continue;
+      unigram_rules_[label].insert(arc.rule);
+    }
+  }
+
+  Grammar grammar_;
+  PDT pdt_;
+  vector<StateInfo> state_info_;  // maps StateId to state-info
+  unordered_map<StateInfo, StateId> state_index_; // maps state-info to StateId
+  unordered_map<StateId, set<RuleId>> seen_rules_; // maps stateId (context state) to observed rules
+  unordered_map<Label, set<RuleId>> unigram_rules_; // maps arc-Label (pop) to set of rules seen with that context from unigram state
+
+};
+
 template <typename T>
 class SetFilterState {
 public:
   typedef set<T> Set;
-  SetFilterState() {}
+  SetFilterState() : set_() {}
   SetFilterState(Set s) : set_(s) {}
-  SetFilterState(T s) { set_.insert(s); }
   SetFilterState(const SetFilterState &sfs) : set_(sfs.GetState()) {}
 
-  static const SetFilterState NoState() { return SetFilterState(kNoStateId); }
+  static const SetFilterState NoState() { return SetFilterState(no_state_); }
 
   size_t Hash() const {
     size_t h = 0;
@@ -263,21 +363,22 @@ public:
     return set_ != f.set_;
   }
 
-  const set<T> &GetState() const { return set_; }
+  const Set &GetState() const { return set_; }
 
-  void Union(set<T> set2) {
+  void Union(Set set2) {
     set_.insert(set2.begin(), set2.end());
   }
 
   const bool Contains(const T t) const { return set_.find(t) != set_.end(); }
 
 private:
-  set<T> set_;
+  const Set &set_;
+  const static Set &no_state_({kNoStateId});
 
 };
 
 template <class M1, class M2>
-class BenComposeFilter {
+class TripoliComposeFilter {
 public:
   typedef typename M1::FST FST;
   typedef typename M2::FST PDT;
@@ -286,26 +387,35 @@ public:
   typedef M1 Matcher1;
   typedef M2 Matcher2;
 
-  BenComposeFilter(const GrammarInfo &grammar, const FST &fst, const PDT &pdt,
+  TripoliComposeFilter(const Grammar &grammar, const FST &fst, const PDT &pdt,
+                   const vector<set<Symbol>> &fst_state_labels,
+                   const vector<StateInfo> &fst_state_info,
                    M1 *matcher1 = 0, M2 *matcher2 = 0)
+
           : matcher1_(matcher1 ? matcher1 : new M1(fst, MATCH_OUTPUT)),
             matcher2_(matcher2 ? matcher2 : new M2(pdt, MATCH_INPUT)),
             fst_(matcher1_->GetFst()),
             pdt_(matcher2_->GetFst()),
+            grammar_(grammar),
+            fst_state_labels_(fst_state_labels),
+            fst_state_info_(fst_state_info),
             s1_(kNoStateId),
             s2_(kNoStateId),
             f_(kNoStateId) {}
 
-  BenComposeFilter(const BenComposeFilter<M1, M2> &filter, bool safe = false)
+  TripoliComposeFilter(const TripoliComposeFilter<M1, M2> &filter, bool safe = false)
           : matcher1_(filter.matcher1_->Copy(safe)),
             matcher2_(filter.matcher2_->Copy(safe)),
             fst_(matcher1_->GetFst()),
             pdt_(matcher2_->GetFSt()),
+            grammar_(filter.grammar_),
+            fst_state_info_(filter.fst_state_info_),
+            fst_state_labels_(filter.fst_state_labels_),
             s1_(kNoStateId),
             s2_(kNoStateId),
             f_(kNoStateId) {}
 
-  ~BenComposeFilter() {
+  ~TripoliComposeFilter() {
     delete matcher1_;
     delete matcher2_;
   }
@@ -321,8 +431,11 @@ public:
   }
 
   FilterState FilterArc(Arc *arc1, Arc *arc2) const {
+    if (arc2.ilabel == 0)
     if (f_.Contains(arc2->rule))
       return FilterState::NoState();
+    if ()
+
   }
 
 private:
@@ -333,8 +446,10 @@ private:
   StateId s1_;
   StateId s2_;
   FilterState f_;
+  vector<set<Label>> fst_state_labels_;
 
-  void operator=(const BenComposeFilter<M1, M2> &); // disallow
+
+  void operator=(const TripoliComposeFilter<M1, M2> &); // disallow
 };
 
 
