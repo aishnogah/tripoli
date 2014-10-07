@@ -1,6 +1,7 @@
 # Xcode directories and 3rd party dependencies
 tripoli.xcodeproj/
 .idea/
+Build/
 openfst-include/
 openfst-lib/
 

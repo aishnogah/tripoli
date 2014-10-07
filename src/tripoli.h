@@ -4,6 +4,7 @@
 #ifndef TRIPOLI_TRIPOLI_H__
 #define TRIPOLI_TRIPOLI_H__
 
+#include <cstdlib>
 #include <cstring>
 #include <string>
 #include <stdexcept>
@@ -15,6 +16,7 @@
 #include <tuple>
 #include <vector>
 #include <memory>
+#include <functional>
 
 using std::string;
 using std::invalid_argument;
@@ -25,6 +27,8 @@ using std::make_pair;
 using std::tuple;
 using std::vector;
 using std::unique_ptr;
+using std::set_union;
+using std::hash;
 
 #include <fst/fst.h>
 #include <fst/mutable-fst.h>
@@ -32,20 +36,23 @@ using std::unique_ptr;
 #include <fst/compose.h>
 #include <pdt/compose.h>
 #include <fst/util.h>
+#include <fst/filter-state.h>
 
 namespace fst {
 
-bool ReadIntVectors(const string& filename, vector<vector<int64> > *vectors);
-bool ReadNumberedStrings(const string& filename, vector<string> *strings);
+template <typename T>
+bool ReadIntVectors(const string &filename, vector<vector<T>> *vectors);
+bool ReadNumberedStrings(const string &filename, vector<string> *strings);
 
 
-typedef int64 Label;  // arc label
-typedef int64 Symbol; // grammar symbol
-typedef int64 StateId;
-typedef int64 RuleId;
+typedef int Label;  // arc label
+typedef int Symbol; // grammar symbol
+typedef int StateId;
+typedef int RuleId;
 typedef vector<Symbol> Rule;  // grammar rule
+typedef PairFilterState<ListFilterState<StateId>, ListFilterState<Label>> BaseFilterState;
 
-const int64 kNoRuleId   =  -1;  // Not a valid rule ID
+const int kNoRuleId   =  -1;  // Not a valid rule ID
 
 template <class W>
 class RuleArc : public ArcTpl<W> {
@@ -119,9 +126,9 @@ public:
     return false;
   }
 
-  bool RuleCanReach(RuleId rule, Symbol term) {
+  bool RuleCanReach(RuleId r, Symbol term) {
     //TODO cache separately for speed-up
-    return SymbolCanReach(rules_[rule][1], term);
+    return SymbolCanReach(rules_[r][1], term);
   }
 
   void ValidateRule(Rule rule) {
@@ -240,11 +247,18 @@ Grammar *ReadGrammar(const string symbolfile, const string rulefile, const strin
 }
 
 enum StateTag {
-  TRIGRAM_STATE,
-  BIGRAM_STATE,
-  UNIGRAM_STATE,
-  DUMMY_STATE,
-  PORTAL_STATE
+  TRIGRAM_STATE = 0,
+  BIGRAM_STATE = 1,
+  UNIGRAM_STATE = 2,
+  DUMMY_STATE = 3,
+  PORTAL_STATE = 4
+};
+
+enum ArcTag {
+  DUMMY_ARC = -1,
+  PORTAL_ARC = -2,
+  LEXICAL_BACKOFF_ARC = -3,
+  SYNTACTIC_BACKOFF_ARC = -4,
 };
 
 struct StateInfo {
@@ -254,6 +268,97 @@ struct StateInfo {
 };
 
 
+class TripoliFilterState {
+public:
+  TripoliFilterState() : no_state_flag_(false) {
+    states_.reserve(3);
+    labels_.reserve(3);
+  }
+  TripoliFilterState(const vector<StateId> &states, const vector<Label> &labels, const set<RuleId> &disallowed)
+          : no_state_flag_(false), states_(states), labels_(labels), disallowed_(disallowed) {}
+
+  TripoliFilterState(bool no_state_flag) : no_state_flag_(no_state_flag) {}
+
+   TripoliFilterState GenerateAddState(StateId state, const set<RuleId> &disallowed) const {
+     set<RuleId> new_disallowed;
+     set_union(disallowed_.cbegin(), disallowed_.cend(), disallowed.cbegin(), disallowed.cend(),
+             std::inserter(new_disallowed, new_disallowed.end()));
+
+     vector<StateId> new_states(states_);
+     new_states.push_back(state);
+     return TripoliFilterState(new_states, labels_, new_disallowed);
+   }
+  TripoliFilterState GenerateAddLabel(Label label, const set<RuleId> &disallowed) const {
+    set<RuleId> new_disallowed;
+    set_union(disallowed_.cbegin(), disallowed_.cend(), disallowed.cbegin(), disallowed.cend(),
+           std::inserter(new_disallowed, new_disallowed.end()));
+
+    vector<Label> new_labels(labels_);
+    new_labels.push_back(label);
+    return TripoliFilterState(states_, new_labels, new_disallowed);
+  }
+
+  bool Contains(RuleId r) {
+    return disallowed_.find(r) != disallowed_.end();
+  }
+
+  static const TripoliFilterState &NoState() { return no_state_;}
+
+  template <typename T>
+  static size_t VecHash(vector<T> vec) {
+    size_t h = 0;
+    for (typename vector<T>::const_iterator it = vec.cbegin();
+         it != vec.cend(); ++it) {
+      h ^= h << 1 ^ *it;
+    }
+    return h;
+  }
+
+  size_t Hash() const {
+    size_t h1 = VecHash<StateId>(states_);
+    size_t h2 = VecHash<Label>(labels_);
+    const int lshift = 5;
+    const int rshift = CHAR_BIT * sizeof(size_t) - 5;
+    return h1 << lshift ^ h1 >> rshift ^ h2;
+  }
+
+  bool operator==(const TripoliFilterState &f) const {
+    if (f.no_state_flag_ && no_state_flag_)
+      return true;
+    else
+      return f.states_ == states_ && f.labels_ == labels_;
+  }
+
+  bool operator!=(const TripoliFilterState &f) const {
+    if (f.no_state_flag_ && no_state_flag_)
+      return false;
+    else
+      return f.states_ != states_ || f.labels_ != labels_;
+  }
+
+private:
+  bool no_state_flag_;
+  vector<StateId> states_;
+  vector<Label> labels_;
+  set<RuleId> disallowed_;
+
+  static TripoliFilterState no_state_;
+  template <class M1, class M2> friend class TripoliComposeFilter;
+};
+
+struct FilterStateHash {
+  size_t operator()(const TripoliFilterState &f) { return f.Hash(); }
+};
+
+struct StateInfoHash {
+  size_t operator()(const StateInfo &si) {
+    hash<Symbol> hash_fn;
+    size_t h1 = hash_fn(si.fst);
+    size_t h2 = hash_fn(si.snd);
+    return h1 << 5 ^ h1 >> (CHAR_BIT * sizeof(size_t) - 5) ^ h2;
+  }
+};
+
 template <class F>
 class PDTInfo {
 public:
@@ -262,7 +367,7 @@ public:
   typedef typename Arc::W Weight;
 
   PDTInfo(Grammar &grammar, PDT &pdt, vector<StateInfo> &state_info)
-          : grammar_(grammar),
+          : grammar(grammar),
             pdt_(pdt),
             state_info_(state_info) {
 
@@ -274,39 +379,52 @@ public:
 
       switch (si.tag) {
         case TRIGRAM_STATE:
-          if (!(grammar_.IsTerm(si.fst) && grammar_.IsTerm(si.snd)))
-            invalid_argument("invalid StateInfo for trigram state: " + itoa(state));
+          if (!(grammar.IsTerm(si.fst) && grammar.IsTerm(si.snd)))
+            invalid_argument("invalid StateInfo for trigram state: " + std::to_string(state));
           collect_rules(state);
+          state_index_[si] = state;
           break;
 
         case BIGRAM_STATE:
-          if (!(grammar_.IsTerm(si.fst) && si.snd == 0))
-            invalid_argument("invalid StateInfo for bigram state: " + itoa(state));
+          if (!(grammar.IsTerm(si.fst) && si.snd == 0))
+            invalid_argument("invalid StateInfo for bigram state: " + std::to_string(state));
           collect_rules(state);
+          state_index_[si] = state;
           break;
 
         case UNIGRAM_STATE:
           if (!(si.fst == 0 && si.snd == 0))
-            invalid_argument("invalid StateInfo for unigram state: " + itoa(state));
+            invalid_argument("invalid StateInfo for unigram state: " + std::to_string(state));
           collect_unigram_rules(state);
+          state_index_[si] = state;
           break;
 
         case DUMMY_STATE:
           if (!(si.fst == 0 && si.snd == 0))
-            invalid_argument("invalid StateInfo for dummy state: " + itoa(state));
+            invalid_argument("invalid StateInfo for dummy state: " + std::to_string(state));
           break;
         case PORTAL_STATE:
           if (!(si.fst == 0 && si.snd == 0))
-            invalid_argument("invalid StateInfo for portal state: " + itoa(state));
+            invalid_argument("invalid StateInfo for portal state: " + std::to_string(state));
       }
-      state_index_[state] = si;
     }
   }
 
-private:
+  set<RuleId> &GetContextRuleSet(StateId s) const {
+    return seen_rules_[s];
+  }
+  set<RuleId> &GetUnigramRuleSet(Label l) const {
+    return unigram_rules_[l];
+  }
 
+  StateInfo &GetStateInfo(StateId s) const {
+    return state_info_[s];
+  }
+
+
+private:
   void collect_rules(StateId s) {
-    set<RuleId> &rules = seen_rules_[s]
+    set<RuleId> &rules = seen_rules_[s];
     for (ArcIterator<PDT> aiter(pdt_, s);
          !aiter.Done();
          aiter.Next()) {
@@ -314,7 +432,6 @@ private:
       rules.insert(arc.rule);
     }
   }
-
   void collect_unigram_rules(StateId s) {
     for (ArcIterator<PDT> aiter(pdt_, s);
          !aiter.Done();
@@ -327,55 +444,17 @@ private:
     }
   }
 
-  Grammar grammar_;
   PDT pdt_;
   vector<StateInfo> state_info_;  // maps StateId to state-info
-  unordered_map<StateInfo, StateId> state_index_; // maps state-info to StateId
+  unordered_map<StateInfo, StateId, StateInfoHash> state_index_; // maps (context) state-info to StateId
   unordered_map<StateId, set<RuleId>> seen_rules_; // maps stateId (context state) to observed rules
   unordered_map<Label, set<RuleId>> unigram_rules_; // maps arc-Label (pop) to set of rules seen with that context from unigram state
+//  unordered_map<FilterState, set<RuleId>, FilterStateHash> cached_filter_sets_;
 
-};
-
-template <typename T>
-class SetFilterState {
 public:
-  typedef set<T> Set;
-  SetFilterState() : set_() {}
-  SetFilterState(Set s) : set_(s) {}
-  SetFilterState(const SetFilterState &sfs) : set_(sfs.GetState()) {}
-
-  static const SetFilterState NoState() { return SetFilterState(no_state_); }
-
-  size_t Hash() const {
-    size_t h = 0;
-    typename Set::const_iterator iter;
-    for (iter = set_.begin(); iter != set_.end(); ++iter) {
-      h ^= h << 1  ^ *iter;
-    }
-    return h;
-  }
-
-  bool operator==(const SetFilterState &f) const {
-    return set_ == f.set_;
-  }
-
-  bool operator!=(const SetFilterState &f) const {
-    return set_ != f.set_;
-  }
-
-  const Set &GetState() const { return set_; }
-
-  void Union(Set set2) {
-    set_.insert(set2.begin(), set2.end());
-  }
-
-  const bool Contains(const T t) const { return set_.find(t) != set_.end(); }
-
-private:
-  const Set &set_;
-  const static Set &no_state_({kNoStateId});
-
+  Grammar grammar;
 };
+
 
 template <class M1, class M2>
 class TripoliComposeFilter {
@@ -383,37 +462,29 @@ public:
   typedef typename M1::FST FST;
   typedef typename M2::FST PDT;
   typedef typename PDT::Arc Arc;
-  typedef SetFilterState<RuleId> FilterState;
   typedef M1 Matcher1;
   typedef M2 Matcher2;
+  typedef TripoliFilterState FilterState;
 
-  TripoliComposeFilter(const Grammar &grammar, const FST &fst, const PDT &pdt,
-                   const vector<set<Symbol>> &fst_state_labels,
-                   const vector<StateInfo> &fst_state_info,
-                   M1 *matcher1 = 0, M2 *matcher2 = 0)
-
+  TripoliComposeFilter(const FST &fst, const PDT &pdt, const PDTInfo<PDT> &pdt_info, M1 *matcher1 = 0, M2 *matcher2 = 0)
           : matcher1_(matcher1 ? matcher1 : new M1(fst, MATCH_OUTPUT)),
             matcher2_(matcher2 ? matcher2 : new M2(pdt, MATCH_INPUT)),
             fst_(matcher1_->GetFst()),
             pdt_(matcher2_->GetFst()),
-            grammar_(grammar),
-            fst_state_labels_(fst_state_labels),
-            fst_state_info_(fst_state_info),
+            pdt_info_(pdt_info),
             s1_(kNoStateId),
             s2_(kNoStateId),
-            f_(kNoStateId) {}
+            f_(kNoStateId) { TripoliFilterState::no_state_ = FilterState(true); }
 
   TripoliComposeFilter(const TripoliComposeFilter<M1, M2> &filter, bool safe = false)
           : matcher1_(filter.matcher1_->Copy(safe)),
             matcher2_(filter.matcher2_->Copy(safe)),
             fst_(matcher1_->GetFst()),
             pdt_(matcher2_->GetFSt()),
-            grammar_(filter.grammar_),
-            fst_state_info_(filter.fst_state_info_),
-            fst_state_labels_(filter.fst_state_labels_),
+            pdt_info_(filter.pdt_info_),
             s1_(kNoStateId),
             s2_(kNoStateId),
-            f_(kNoStateId) {}
+            f_(kNoStateId) { TripoliFilterState::no_state_ = FilterState(true); }
 
   ~TripoliComposeFilter() {
     delete matcher1_;
@@ -430,12 +501,28 @@ public:
     f_ = f;
   }
 
-  FilterState FilterArc(Arc *arc1, Arc *arc2) const {
-    if (arc2.ilabel == 0)
-    if (f_.Contains(arc2->rule))
-      return FilterState::NoState();
-    if ()
+  const FilterState FilterArc(Arc *arc1, Arc *arc2) const {
+    RuleId r = arc2->rule;
+    switch (r) {
+      case LEXICAL_BACKOFF_ARC: {
+        set<RuleId> &disallowed = pdt_info_.GetContextRuleSet(s2_);
+        return f_.GenerateAddState(s2_, disallowed);
+      }
+      case SYNTACTIC_BACKOFF_ARC: {
+        set<RuleId> &disallowed = pdt_info_.GetUnigramRuleSet(arc2->ilabel);
+        return f_.GenerateAddLabel(arc2->ilabel, disallowed);
+      }
+      case DUMMY_ARC:
+      case PORTAL_ARC:
+        return f_;
+    }
+    if (f_.Contains(r))
+      return TripoliFilterState::NoState();
 
+    if (!pdt_info_.grammar.RuleCanReach(r, arc1->olabel))
+      return TripoliFilterState::NoState();
+
+    return f_;
   }
 
 private:
@@ -443,17 +530,18 @@ private:
   Matcher2 *matcher2_;
   const FST &fst_;
   const PDT &pdt_;
+  const PDTInfo<PDT> &pdt_info_;
   StateId s1_;
   StateId s2_;
-  FilterState f_;
+  TripoliFilterState f_;
   vector<set<Label>> fst_state_labels_;
-
 
   void operator=(const TripoliComposeFilter<M1, M2> &); // disallow
 };
 
 
-bool ReadIntVectors(const string& filename, vector<vector<int64> > *vectors) {
+template <typename T>
+bool ReadIntVectors(const string& filename, vector<vector<T>> *vectors) {
   ifstream strm(filename.c_str());
   if (!strm) {
     LOG(ERROR) << "ReadIntVectors: Can't open file: " << filename;
@@ -472,9 +560,9 @@ bool ReadIntVectors(const string& filename, vector<vector<int64> > *vectors) {
       continue;
 
     bool err;
-    vector<int64> vec;
-    for (ssize_t i = 0; i < col.size(); ++i) {
-      int64 n = StrToInt64(col[i], filename, nline, false, &err);
+    vector<T> vec;
+    for (size_t i = 0; i < col.size(); ++i) {
+      T n = StrToInt64(col[i], filename, nline, false, &err);
       if (err) return false;
       vec.push_back(n);
     }
@@ -510,52 +598,5 @@ bool ReadNumberedStrings(const string& filename, vector<string> *strings) {
   return true;
 }
 
-template <class F1, class F2, class F3>
-class TripleFilterState {
-public:
-  TripleFilterState() : f1_(F1::NoState()), f2_(F2::NoState()), f3_(F3::NoState()) {}
-  TripleFilterState(const F1 &f1, const F2 &f2, const F3 &f3) : f1_(f1), f2_(f2), f3_(f3) {}
-
-  static const TripleFilterState NoState() { return TripleFilterState(); }
-
-  size_t Hash() const {
-    size_t h1 = f1_.Hash();
-    size_t h2 = f2_.Hash();
-    size_t h3 = f3_.Hash();
-    const int lshift = 5;
-    const int rshift = CHAR_BIT * sizeof(size_t) - 5;
-    h1 = h1 << lshift ^ h1 >> rshift ^ h2;
-    return h1 << lshift ^ h1 >> rshift ^ h3;
-  }
-
-  bool operator==(const TripleFilterState &f) const {
-    return f1_ == f.f1_ && f2_ == f.f2_ && f3_ == f.f3_;
-  }
-
-  bool operator!=(const TripleFilterState &f) const {
-    return f1_ != f.f1_ || f2_ != f.f2_ || f3_ != f.f3_;
-  }
-
-  const F1 &GetState1() const { return f1_; }
-  const F2 &GetState2() const { return f2_; }
-  const F3 &GetState3() const { return f3_; }
-
-  void SetState(const F1 &f1, const F2 &f2, const F3 &f3) {
-    f1_ = f1;
-    f2_ = f2;
-    f3_ = f3;
-  }
-
-private:
-  F1 f1_;
-  F2 f2_;
-  F3 f3_;
 };
-
-
-
-
-};
-
-
 #endif   // TRIPOLI_TRIPOLI_H__
