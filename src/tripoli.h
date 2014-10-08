@@ -50,15 +50,16 @@ typedef int Symbol; // grammar symbol
 typedef int StateId;
 typedef int RuleId;
 typedef vector<Symbol> Rule;  // grammar rule
-typedef PairFilterState<ListFilterState<StateId>, ListFilterState<Label>> BaseFilterState;
 
-const int kNoRuleId   =  -1;  // Not a valid rule ID
-
-template <class W>
-class RuleArc : public ArcTpl<W> {
+template <class Arc>
+class RuleArc : public Arc {
 public:
-  RuleArc(Label i, Label o, const W& w, StateId s, RuleId r = -1)
-          : ArcTpl<W>(i, o, w, s), rule(r) {}
+  typedef typename Arc::Weight Weight;
+
+  RuleArc(Label i, Label o, const Weight& w, StateId s, RuleId r = -1)
+          : Arc(i, o, w, s), rule(r) {}
+  RuleArc() {}
+
   RuleId rule;
 };
 
@@ -323,17 +324,11 @@ public:
   }
 
   bool operator==(const TripoliFilterState &f) const {
-    if (f.no_state_flag_ && no_state_flag_)
-      return true;
-    else
-      return f.states_ == states_ && f.labels_ == labels_;
+    return f.no_state_flag_ && no_state_flag_ || f.states_ == states_ && f.labels_ == labels_;
   }
 
   bool operator!=(const TripoliFilterState &f) const {
-    if (f.no_state_flag_ && no_state_flag_)
-      return false;
-    else
-      return f.states_ != states_ || f.labels_ != labels_;
+    return !(f.no_state_flag_ && no_state_flag_) && (f.states_ != states_ || f.labels_ != labels_);
   }
 
 private:
@@ -420,7 +415,6 @@ public:
   StateInfo &GetStateInfo(StateId s) const {
     return state_info_[s];
   }
-
 
 private:
   void collect_rules(StateId s) {
