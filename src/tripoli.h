@@ -34,7 +34,7 @@ using std::hash;
 #include <fst/mutable-fst.h>
 #include <fst/matcher.h>
 #include <fst/compose.h>
-#include <pdt/compose.h>
+#include <fst/extensions/pdt/compose.h>
 #include <fst/util.h>
 #include <fst/filter-state.h>
 

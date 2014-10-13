@@ -163,7 +163,10 @@ template <class A> class PdtCompiler {
       fst_.SetOutputSymbols(osyms);
   }
 
-  const VectorFst<A> &Fst() const {
+  // CHECK: Ben, I'm assuming this is what you meant here as main.cpp
+  // calls a Pdt method that doesn't exist. I had to change the name
+  // to make this compile.
+  const VectorFst<A> &Pdt() const {
     return fst_;
   }
 
@@ -245,7 +248,10 @@ template <class A> class PdtCompiler {
   bool allow_negative_labels_;         // not recommended; may cause conflicts
   bool add_symbols_;         // add to symbol tables on-the fly
 
-  DISALLOW_COPY_AND_ASSIGN(PdtCompiler);
+  // CHECK: Ben, I had to comment this out because it marked the
+  // constructors above private disallowing the object from being
+  // constructed in main.cpp.
+  // DISALLOW_COPY_AND_ASSIGN(PdtCompiler);
 };
 
 }  // namespace fst

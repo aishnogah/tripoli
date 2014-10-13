@@ -74,5 +74,5 @@ int main(int argc, char **argv) {
   bool allow_negative_labels = false;
 
   fst::PdtCompiler<A> pdtcompiler = fst::PdtCompiler<A>(*istrm, source, isyms, osyms, ssyms, accep, ikeep, okeep, allow_negative_labels);
-  VectorFst<A> pdt = pdtcompiler.Pdt();
+  fst::VectorFst<A> pdt = pdtcompiler.Pdt();
 }
