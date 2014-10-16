@@ -1,27 +1,42 @@
-CC := g++
-SRCDIR := src
-BUILDDIR := build
-TARGET := build/main
-VPATH := src
-SRCEXT := cpp
-SOURCES := $(shell find $(SRCDIR) -type f -name '*.$(SRCEXT)')
-OBJECTS := $(patsubst $(SRCDIR)/%,$(BUILDDIR)/%,$(SOURCES:.$(SRCEXT)=.o))
-CFLAGS := -g -std=c++11 # -Wall
+CXX := g++
+CXXFLAGS := -g -std=c++11 # -Wall
 LIB := -L/usr/local/lib -lfst -ldl
 INC := -I/usr/local/include
 
+TARGET := src/main
+TEST_TARGET := test/all-tests
+TARGETS := $(TARGET) $(TEST_TARGET)
+MAINS := $(addsuffix .o,$(TARGETS))
+
+SRC_SOURCES := $(shell find src -name '*.cpp')
+SRC_OBJECTS := $(filter-out $(MAINS),$(SRC_SOURCES:.cpp=.o))
+
+TST_SOURCES := $(shell find test -name '*.cpp')
+TST_OBJECTS := $(filter-out $(MAINS),$(TST_SOURCES:.cpp=.o))
+
+OBJECTS := $(SRC_OBJECTS) $(TST_OBJECTS)
+
 all: $(TARGET)
 
-$(TARGET): $(OBJECTS)
-	@echo " Linking..."
-	@echo " $(CC) $^ -o $(TARGET) $(LIB)"; $(CC) $^ -o $(TARGET) $(LIB)
+# Compilation
 
-$(BUILDDIR)/%.o: $(SRCDIR)/%.$(SRCEXT)
-	@mkdir -p $(BUILDDIR)
-	@echo " $(CC) $(CFLAGS) $(INC) -c -o $@ $<"; $(CC) $(CFLAGS) $(INC) -c -o $@ $<
+%.o: %.cpp
+	$(CXX) $(CXXFLAGS) $(INC) -Isrc -c $^ -o $@
+
+# Linking
+
+$(TARGET): $(SRC_OBJECTS) $(TARGET).o
+	$(CXX) $(CXXFLAGS) $(LIB) $^ -o $@
+
+$(TEST_TARGET): $(OBJECTS) $(TEST_TARGET).o
+	$(CXX) $(CXXFLAGS) $(LIB) -lgtest $^ -o $@
+
+# Phony
+	
+test: $(TEST_TARGET)
+	$<
 
 clean:
-	@echo " Cleaning..."; 
-	@echo " $(RM) -r $(BUILDDIR) $(TARGET)"; $(RM) -r $(BUILDDIR) $(TARGET)
+	rm -rf $(OBJECTS) $(MAINS) $(TARGETS) $(patsubst %,%.dSYM,$(MAINS)) 
 
-.PHONY: clean
+.PHONY: test clean

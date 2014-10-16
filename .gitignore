@@ -40,3 +40,6 @@ openfst-lib/
 *.app
 
 
+.project
+.cproject
+.settings

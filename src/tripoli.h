@@ -176,7 +176,7 @@ private:
   // replacement_symbols_[s] is a vector of symbols which appear as the left-most symbol of the RHS of a production from s
 };
 
-bool ReadSymbolFile(const string& filename, Symbol *max_term,
+inline bool ReadSymbolFile(const string& filename, Symbol *max_term,
         Symbol *max_preterm, Symbol *max_nonterm) {
   vector<string> symbols;
   ReadNumberedStrings(filename, &symbols);
@@ -208,7 +208,7 @@ bool ReadSymbolFile(const string& filename, Symbol *max_term,
   return false;
 }
 
-bool ReadLabelFile(const string& filename, vector<Symbol> *labels_to_symbols, const Symbol max_term) {
+inline bool ReadLabelFile(const string& filename, vector<Symbol> *labels_to_symbols, const Symbol max_term) {
   vector<string> labels;
   ReadNumberedStrings(filename, &labels);
   labels_to_symbols->push_back(-1);
@@ -232,7 +232,7 @@ bool ReadLabelFile(const string& filename, vector<Symbol> *labels_to_symbols, co
   return true;
 }
 
-Grammar *ReadGrammar(const string symbolfile, const string rulefile, const string labelfile) {
+inline Grammar *ReadGrammar(const string symbolfile, const string rulefile, const string labelfile) {
   Symbol max_term;
   Symbol max_preterm;
   Symbol max_nonterm;
@@ -565,7 +565,7 @@ bool ReadIntVectors(const string& filename, vector<vector<T>> *vectors) {
   return true;
 }
 
-bool ReadNumberedStrings(const string& filename, vector<string> *strings) {
+inline bool ReadNumberedStrings(const string& filename, vector<string> *strings) {
   ifstream strm(filename.c_str());
   if (!strm) {
     LOG(ERROR) << "ReadNumberedStrings: Can't open file: " << filename;
