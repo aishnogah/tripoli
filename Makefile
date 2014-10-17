@@ -32,6 +32,9 @@ $(TEST_TARGET): $(OBJECTS) $(TEST_TARGET).o
 	$(CXX) $(CXXFLAGS) $(LIB) -lgtest $^ -o $@
 
 # Phony
+
+run: $(TARGET)
+	src/main data/pdt.txt data/arc-labels.txt data/grammar-symbols.txt data/rules.txt data/states.txt
 	
 test: $(TEST_TARGET)
 	$<
@@ -39,4 +42,4 @@ test: $(TEST_TARGET)
 clean:
 	rm -rf $(OBJECTS) $(MAINS) $(TARGETS) $(patsubst %,%.dSYM,$(MAINS)) 
 
-.PHONY: test clean
+.PHONY: run test clean
