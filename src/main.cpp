@@ -32,6 +32,7 @@
 
 #include "tripoli-compile.h"
 #include "tripoli.h"
+#include "states.h"
 
 
 DEFINE_bool(acceptor, false, "Input in acceptor format");
@@ -75,4 +76,20 @@ int main(int argc, char **argv) {
 
   fst::PdtCompiler<A> pdtcompiler = fst::PdtCompiler<A>(*istrm, source, isyms, osyms, ssyms, accep, ikeep, okeep, allow_negative_labels);
   fst::VectorFst<A> pdt = pdtcompiler.Pdt();
+
+  // Read the state file
+  ifstream stateFile(states);
+  vector<fst::StateInfo> stateInfo = read_states(stateFile);
+
+  // Read the grammar file
+  fst::Grammar *grammar = fst::ReadGrammar(symbols, rules, labels);
+
+  fst::PDTInfo<fst::VectorFst<A> > pdtInfo(grammar, pdt, stateInfo);
+
+  // TODO Read the linear chain input, just borrow code from pdtcompose.h or
+  // TODO Invoke TripoliComposeFilter, which takes the linear chain, the pdt above, the pdt info above, and two matchers (multi-epsilon matchers?)
+  // TODO The composition (like src/bin/fstcompose.cc), e.g.
+  //  fst::ComposeOptions opts(FLAGS_connect, compose_filter);
+  //  s::Compose(*ifst1, *ifst2, &ofst, opts);
+  //  ofst.Write(out_name);
 }

@@ -93,6 +93,7 @@ template <class A> class PdtCompiler {
     allow_negative_labels_ = allow_negative_labels;
     add_symbols_ = add_symbols;
     char line[kLineLen];
+    // Reads pdt.txt
     while (istrm.getline(line, kLineLen)) {
       ++nline_;
       vector<char *> col;
