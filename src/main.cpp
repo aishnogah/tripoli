@@ -33,7 +33,8 @@
 #include "tripoli-compile.h"
 #include "tripoli.h"
 #include "states.h"
-
+#include <fst/script/compose.h>
+#include <fst/script/connect.h>
 
 DEFINE_bool(acceptor, false, "Input in acceptor format");
 DEFINE_string(arc_type, "standard", "Output arc type");
@@ -44,8 +45,7 @@ DEFINE_string(ssymbols, "", "State label symbol table");
 DEFINE_bool(keep_isymbols, false, "Store input label symbol table with FST");
 DEFINE_bool(keep_osymbols, false, "Store output label symbol table with FST");
 DEFINE_bool(keep_state_numbering, false, "Do not renumber input states");
-DEFINE_bool(allow_negative_labels, false,
-        "Allow negative labels (not recommended; may cause conflicts)");
+DEFINE_bool(allow_negative_labels, false, "Allow negative labels (not recommended; may cause conflicts)");
 
 typedef typename fst::RuleArc<fst::StdArc> A;
 
@@ -53,14 +53,20 @@ int main(int argc, char **argv) {
   using fst::istream;
   using fst::ifstream;
   using fst::SymbolTable;
+  using fst::script::FstClass;
 
-  const char *source = argv[1];
-  const char *labels = argv[2];
-  const char *symbols = argv[3];
-  const char *rules = argv[4];
-  const char *states = argv[5];
+  const char *inputFilename = argv[1];
+  const char *pdtFilename = argv[2];
+  const char *labels = argv[3];
+  const char *symbols = argv[4];
+  const char *rules = argv[5];
+  const char *states = argv[6];
+  const char *out_name = argv[7];
 
-  istream *istrm = new ifstream(source);
+  FstClass *ifst = FstClass::Read(inputFilename);
+  cout << "Input read..." << endl;
+
+  istream *istrm = new ifstream(pdtFilename);
   const SymbolTable *isyms = 0, *osyms = 0, *ssyms = 0;
 
   fst::SymbolTableTextOptions opts;
@@ -74,22 +80,30 @@ int main(int argc, char **argv) {
   bool okeep = false;
   bool allow_negative_labels = false;
 
-  fst::PdtCompiler<A> pdtcompiler = fst::PdtCompiler<A>(*istrm, source, isyms, osyms, ssyms, accep, ikeep, okeep, allow_negative_labels);
+  fst::PdtCompiler<A> pdtcompiler = fst::PdtCompiler<A>(*istrm, pdtFilename, isyms, osyms, ssyms, accep, ikeep, okeep, allow_negative_labels);
   fst::VectorFst<A> pdt = pdtcompiler.Pdt();
+  cout << "PDT compiled..." << endl;
 
   // Read the state file
   ifstream stateFile(states);
   vector<fst::StateInfo> stateInfo = read_states(stateFile);
+  cout << "States read..." << endl;
 
   // Read the grammar file
   fst::Grammar *grammar = fst::ReadGrammar(symbols, rules, labels);
+  // TODO This appears to cause a bus error 10
+  // cout << "Grammar read..." << endl;
 
+  // TODO And this is the offending line for the type error...
   fst::PDTInfo<fst::VectorFst<A> > pdtInfo(grammar, pdt, stateInfo);
 
-  // TODO Read the linear chain input, just borrow code from pdtcompose.h or
   // TODO Invoke TripoliComposeFilter, which takes the linear chain, the pdt above, the pdt info above, and two matchers (multi-epsilon matchers?)
-  // TODO The composition (like src/bin/fstcompose.cc), e.g.
-  //  fst::ComposeOptions opts(FLAGS_connect, compose_filter);
-  //  s::Compose(*ifst1, *ifst2, &ofst, opts);
-  //  ofst.Write(out_name);
+  // fst::TripoliComposeFilter tripoliFilter(void, pdt, void);
+
+  fst::script::VectorFstClass ofst(ifst->ArcType());
+  fst::ComposeOptions composeOpts(true, fst::AUTO_FILTER); // Your filter goes here
+  // TODO Duh the second argument is wrong
+  // fst::script::Compose(*ifst, *ifst, &ofst, composeOpts);
+  // ofst.Write(out_name);
+
 }

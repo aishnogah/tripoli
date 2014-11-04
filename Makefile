@@ -1,6 +1,6 @@
 CXX := g++
 CXXFLAGS := -g -std=c++11 # -Wall
-LIB := -L/usr/local/lib -lfst -ldl
+LIB := -L/usr/local/lib -lfst -ldl -lfstscript
 INC := -I/usr/local/include
 
 TARGET := src/main
@@ -34,7 +34,7 @@ $(TEST_TARGET): $(OBJECTS) $(TEST_TARGET).o
 # Phony
 
 run: $(TARGET)
-	src/main data/pdt.txt data/arc-labels.txt data/grammar-symbols.txt data/rules.txt data/states.txt
+	src/main data/input.fst data/pdt.txt data/arc-labels.txt data/grammar-symbols.txt data/rules.txt data/states.txt output.fst
 	
 test: $(TEST_TARGET)
 	$<
