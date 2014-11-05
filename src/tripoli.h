@@ -346,7 +346,7 @@ struct FilterStateHash {
 };
 
 struct StateInfoHash {
-  size_t operator()(const StateInfo &si) {
+  size_t operator()(StateInfo const& si) const {
     hash<Symbol> hash_fn;
     size_t h1 = hash_fn(si.fst);
     size_t h2 = hash_fn(si.snd);
@@ -354,12 +354,18 @@ struct StateInfoHash {
   }
 };
 
+struct StateInfoEquals {
+  bool operator()(StateInfo const& si1, StateInfo const& si2) const {
+    return (si1.tag == si2.tag && si1.fst == si2.fst && si1.snd == si2.snd);
+  }
+};
+
 template <class F>
 class PDTInfo {
 public:
   typedef F PDT;
-  typedef typename PDT::A Arc;
-  typedef typename Arc::W Weight;
+  typedef typename F::Arc Arc;
+  typedef typename Arc::Weight Weight;
 
   PDTInfo(Grammar &grammar, PDT &pdt, vector<StateInfo> &state_info)
           : grammar(grammar),
@@ -422,7 +428,7 @@ private:
     for (ArcIterator<PDT> aiter(pdt_, s);
          !aiter.Done();
          aiter.Next()) {
-      Arc &arc = aiter.Value();
+      const Arc &arc = aiter.Value();
       rules.insert(arc.rule);
     }
   }
@@ -430,7 +436,7 @@ private:
     for (ArcIterator<PDT> aiter(pdt_, s);
          !aiter.Done();
          aiter.Next()) {
-      Arc &arc = aiter.Value();
+      const Arc &arc = aiter.Value();
       Label label = arc.ilabel;
       if (label == 0)
         continue;
@@ -440,7 +446,7 @@ private:
 
   PDT pdt_;
   vector<StateInfo> state_info_;  // maps StateId to state-info
-  unordered_map<StateInfo, StateId, StateInfoHash> state_index_; // maps (context) state-info to StateId
+  unordered_map<StateInfo, StateId, StateInfoHash, StateInfoEquals> state_index_; // maps (context) state-info to StateId
   unordered_map<StateId, set<RuleId>> seen_rules_; // maps stateId (context state) to observed rules
   unordered_map<Label, set<RuleId>> unigram_rules_; // maps arc-Label (pop) to set of rules seen with that context from unigram state
 //  unordered_map<FilterState, set<RuleId>, FilterStateHash> cached_filter_sets_;
