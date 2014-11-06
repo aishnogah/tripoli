@@ -33,6 +33,7 @@
 #include "tripoli-compile.h"
 #include "tripoli.h"
 #include "states.h"
+#include "readers.h"
 #include <fst/script/fst-class.h>
 #include <fst/script/compile-impl.h>
 

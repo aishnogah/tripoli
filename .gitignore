@@ -44,3 +44,4 @@ openfst-lib/
 .cproject
 .settings
 *.swp
+.gdb_history

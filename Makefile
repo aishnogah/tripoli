@@ -1,5 +1,5 @@
 CXX := g++
-CXXFLAGS := -g -std=c++11 # -Wall
+CXXFLAGS := -ggdb3 -fno-inline -std=c++11 # -Wall
 LIB := -L/usr/local/lib -lfst -ldl -lfstscript
 INC := -I/usr/local/include
 
@@ -35,6 +35,9 @@ $(TEST_TARGET): $(OBJECTS) $(TEST_TARGET).o
 
 run: $(TARGET)
 	src/main data/input.txt data/pdt.txt data/arc-labels.txt data/grammar-symbols.txt data/rules.txt data/states.txt output.fst
+
+debug: $(TARGET)
+	gdb --args src/main data/input.txt data/pdt.txt data/arc-labels.txt data/grammar-symbols.txt data/rules.txt data/states.txt output.fst
 	
 test: $(TEST_TARGET)
 	$<
@@ -42,4 +45,4 @@ test: $(TEST_TARGET)
 clean:
 	rm -rf $(OBJECTS) $(MAINS) $(TARGETS) $(patsubst %,%.dSYM,$(MAINS)) 
 
-.PHONY: run test clean
+.PHONY: run test clean debug
