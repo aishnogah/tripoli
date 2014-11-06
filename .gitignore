@@ -43,3 +43,4 @@ openfst-lib/
 .project
 .cproject
 .settings
+*.swp

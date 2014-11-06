@@ -38,12 +38,9 @@ using std::hash;
 #include <fst/util.h>
 #include <fst/filter-state.h>
 
+#include "readers.h"
+
 namespace fst {
-
-template <typename T>
-bool ReadIntVectors(const string &filename, vector<vector<T>> *vectors);
-bool ReadNumberedStrings(const string &filename, vector<string> *strings);
-
 
 typedef int Label;  // arc label
 typedef int Symbol; // grammar symbol
@@ -233,18 +230,19 @@ inline bool ReadLabelFile(const string& filename, vector<Symbol> *labels_to_symb
 }
 
 inline Grammar *ReadGrammar(const string symbolfile, const string rulefile, const string labelfile) {
-  Symbol max_term;
-  Symbol max_preterm;
-  Symbol max_nonterm;
-  vector<Rule> rules;
-  vector<Symbol> labels_to_symbols;
-  if (!ReadIntVectors(rulefile, &rules))
-    invalid_argument("cannot read rule file");
-  if (!ReadSymbolFile(symbolfile, &max_term, &max_preterm, &max_nonterm))
-    invalid_argument("cannot read grammar-symbols file");
-  if (!ReadLabelFile(labelfile, &labels_to_symbols, max_term))
-    invalid_argument("cannot read labels file");
-  return new Grammar(max_term, max_preterm, max_nonterm, rules, labels_to_symbols);
+	Symbol max_term;
+	Symbol max_preterm;
+	Symbol max_nonterm;
+	vector<Rule> rules;
+	vector<Symbol> labels_to_symbols;
+	if (!ReadIntVectors(rulefile, &rules))
+		invalid_argument("cannot read rule file");
+	cout << "Got here too!" << endl;
+	if (!ReadSymbolFile(symbolfile, &max_term, &max_preterm, &max_nonterm))
+		invalid_argument("cannot read grammar-symbols file");
+	if (!ReadLabelFile(labelfile, &labels_to_symbols, max_term))
+		invalid_argument("cannot read labels file");
+	return new Grammar(max_term, max_preterm, max_nonterm, rules, labels_to_symbols);
 }
 
 enum StateTag {
@@ -538,65 +536,6 @@ private:
 
   void operator=(const TripoliComposeFilter<M1, M2> &); // disallow
 };
-
-
-template <typename T>
-bool ReadIntVectors(const string& filename, vector<vector<T>> *vectors) {
-  ifstream strm(filename.c_str());
-  if (!strm) {
-    LOG(ERROR) << "ReadIntVectors: Can't open file: " << filename;
-    return false;
-  }
-  const int kLineLen = 8096;
-  char line[kLineLen];
-  size_t nline = 0;
-  vectors->clear();
-  while (strm.getline(line, kLineLen)) {
-    ++nline;
-    vector<char *> col;
-    SplitToVector(line, "\n\t ", &col, true);
-    // empty line or comment?
-    if (col.size() == 0 || col[0][0] == '\0' || col[0][0] == '#')
-      continue;
-
-    bool err;
-    vector<T> vec;
-    for (size_t i = 0; i < col.size(); ++i) {
-      T n = StrToInt64(col[i], filename, nline, false, &err);
-      if (err) return false;
-      vec.push_back(n);
-    }
-    vectors->push_back(vec);
-  }
-  return true;
-}
-
-inline bool ReadNumberedStrings(const string& filename, vector<string> *strings) {
-  ifstream strm(filename.c_str());
-  if (!strm) {
-    LOG(ERROR) << "ReadNumberedStrings: Can't open file: " << filename;
-    return false;
-  }
-  const int kLineLen = 8096;
-  char s1[kLineLen];
-  size_t nline = 0;
-  strings->clear();
-  int prevn = -1;
-  bool err;
-  char *s2;
-  while (strm.getline(s1, kLineLen)) {
-    ++nline;
-    if ((s2 = strpbrk("\t ", s1)))
-      *s2 = '\0';
-    int64 n = StrToInt64(s1, filename, nline, false, &err);
-    if (err) return false;
-    if (n <= prevn) return false;
-    for (; prevn < n; ++prevn)
-      strings->push_back("");
-    strings->push_back(s2);
-  }
-  return true;
-}
 
 };
 #endif   // TRIPOLI_TRIPOLI_H__
