@@ -33,8 +33,8 @@
 #include "tripoli-compile.h"
 #include "tripoli.h"
 #include "states.h"
-#include "fst-class.h"
-#import "compile-impl.h"
+#include <fst/script/fst-class.h>
+#include <fst/script/compile-impl.h>
 
 DEFINE_bool(acceptor, false, "Input in acceptor format");
 DEFINE_string(arc_type, "standard", "Output arc type");

@@ -324,7 +324,7 @@ public:
   }
 
   bool operator==(const TripoliFilterState &f) const {
-    return f.no_state_flag_ && no_state_flag_ || f.states_ == states_ && f.labels_ == labels_;
+    return (f.no_state_flag_ && no_state_flag_) || (f.states_ == states_ && f.labels_ == labels_);
   }
 
   bool operator!=(const TripoliFilterState &f) const {
