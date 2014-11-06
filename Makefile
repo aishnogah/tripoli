@@ -34,7 +34,7 @@ $(TEST_TARGET): $(OBJECTS) $(TEST_TARGET).o
 # Phony
 
 run: $(TARGET)
-	src/main data/input.fst data/pdt.txt data/arc-labels.txt data/grammar-symbols.txt data/rules.txt data/states.txt output.fst
+	src/main data/input.txt data/pdt.txt data/arc-labels.txt data/grammar-symbols.txt data/rules.txt data/states.txt output.fst
 	
 test: $(TEST_TARGET)
 	$<
