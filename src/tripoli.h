@@ -223,7 +223,7 @@ public:
     return TripoliFilterState(states_, new_labels, new_disallowed);
   }
 
-  bool Contains(RuleId r) {
+  bool Contains(RuleId r) const {
     return disallowed_.find(r) != disallowed_.end();
   }
 
@@ -335,10 +335,13 @@ public:
     }
   }
 
-  set<RuleId> &GetContextRuleSet(StateId s) const {
+  // TODO Why can't this be const?
+  set<RuleId> &GetContextRuleSet(StateId s) {
     return seen_rules_[s];
   }
-  set<RuleId> &GetUnigramRuleSet(Label l) const {
+
+  // TODO Why can't this be const?
+  set<RuleId> &GetUnigramRuleSet(Label l) {
     return unigram_rules_[l];
   }
 

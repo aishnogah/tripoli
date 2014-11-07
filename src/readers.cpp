@@ -61,7 +61,7 @@ bool ReadNumberedStrings(const string& filename, vector<string> *strings) {
   char *s2;
   while (strm.getline(s1, kLineLen)) {
     ++nline;
-    if ((s2 = strpbrk("\t ", s1)))
+    if ((s2 = const_cast<char *>(strpbrk("\t ", s1))))
       *s2 = '\0';
     int64 n = StrToInt64(s1, filename, nline, false, &err);
     if (err) return false;
@@ -118,7 +118,7 @@ inline bool ReadLabelFile(const string& filename, vector<Symbol> *labels_to_symb
     }
     else {
       if (i <= max_term) return false;
-      char *sym_str = strpbrk(label.c_str(), "P");
+      char *sym_str = const_cast<char*>(strpbrk(label.c_str(), "P"));
       if (!sym_str) return false;
       bool err;
       Symbol sym = StrToInt64(sym_str, filename, i, false, &err);

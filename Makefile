@@ -1,5 +1,5 @@
 CXX := g++
-CXXFLAGS := -ggdb3 -fno-inline -std=c++11 # -Wall
+CXXFLAGS := -ggdb3 -fpermissive -fno-inline -std=c++11 # -Wall
 LIB := -L/usr/local/lib -lfst -ldl -lfstscript
 INC := -I/usr/local/include
 
