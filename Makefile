@@ -1,5 +1,5 @@
 CXX := g++
-CXXFLAGS := -ggdb3 -fpermissive -fno-inline -std=c++11 # -Wall
+CXXFLAGS := -g -std=c++11 # -Wall
 LIB := -L/usr/local/lib -lfst -ldl -lfstscript
 INC := -I/usr/local/include
 
@@ -15,6 +15,7 @@ TST_SOURCES := $(shell find test -name '*.cpp')
 TST_OBJECTS := $(filter-out $(MAINS),$(TST_SOURCES:.cpp=.o))
 
 OBJECTS := $(SRC_OBJECTS) $(TST_OBJECTS)
+RUN_CMD := src/main data/input.txt data/pdt.txt data/arc-labels.txt data/grammar-symbols.txt data/rules.txt data/states.txt output.fst
 
 all: $(TARGET)
 
@@ -26,18 +27,18 @@ all: $(TARGET)
 # Linking
 
 $(TARGET): $(SRC_OBJECTS) $(TARGET).o
-	$(CXX) $(CXXFLAGS) $(LIB) $^ -o $@
+	$(CXX) $(CXXFLAGS) $^ -o $@ $(LIB)
 
 $(TEST_TARGET): $(OBJECTS) $(TEST_TARGET).o
-	$(CXX) $(CXXFLAGS) $(LIB) -lgtest $^ -o $@
+	$(CXX) $(CXXFLAGS) $^ -o $@ $(LIB) -lgtest
 
 # Phony
 
 run: $(TARGET)
-	src/main data/input.txt data/pdt.txt data/arc-labels.txt data/grammar-symbols.txt data/rules.txt data/states.txt output.fst
+	$(RUN_CMD)
 
 debug: $(TARGET)
-	gdb --args src/main data/input.txt data/pdt.txt data/arc-labels.txt data/grammar-symbols.txt data/rules.txt data/states.txt output.fst
+	gdb --args $(RUN_CMD)
 	
 test: $(TEST_TARGET)
 	$<
