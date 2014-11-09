@@ -106,7 +106,6 @@ bool ReadSymbolFile(const string& filename, Symbol *max_term,
 }
 
 inline bool ReadLabelFile(const string& filename, vector<Symbol> *labels_to_symbols, const Symbol max_term) {
-  // TODO One of these returns is being triggered
   cout << "Reading labels..\n";
   vector<string> labels;
   ReadNumberedStrings(filename, &labels);
