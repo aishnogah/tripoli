@@ -52,24 +52,24 @@ bool ReadNumberedStrings(const string& filename, vector<string> *strings) {
     LOG(ERROR) << "ReadNumberedStrings: Can't open file: " << filename;
     return false;
   }
-  const int kLineLen = 8096;
-  char s1[kLineLen];
+  string input;
   size_t nline = 0;
   strings->clear();
   int prevn = -1;
-  bool err;
-  char *s2;
-  while (strm.getline(s1, kLineLen)) {
+  while (getline(strm, input)) {
     ++nline;
-    if ((s2 = const_cast<char *>(strpbrk("\t ", s1))))
-      *s2 = '\0';
-    int64 n = StrToInt64(s1, filename, nline, false, &err);
-    if (err) return false;
+    stringstream ss(input);
+    int64 n;
+    ss >> n;
     if (n <= prevn) return false;
-    for (; prevn < n; ++prevn)
+    for (; prevn < n; ++prevn) {
       strings->push_back("");
-    strings->push_back(s2);
+    }
+    string s;
+    ss >> s;
+    strings->push_back(s);
   }
+  strm.close();
   return true;
 }
 
@@ -106,6 +106,8 @@ bool ReadSymbolFile(const string& filename, Symbol *max_term,
 }
 
 inline bool ReadLabelFile(const string& filename, vector<Symbol> *labels_to_symbols, const Symbol max_term) {
+  // TODO One of these returns is being triggered
+  cout << "Reading labels..\n";
   vector<string> labels;
   ReadNumberedStrings(filename, &labels);
   labels_to_symbols->push_back(-1);
