@@ -100,12 +100,11 @@ int main(int argc, char **argv) {
 
   fst::PDTInfo<StdVectorPdt> pdtInfo(*grammar, pdt, stateInfo);
 
-  // So the problem is a mismatch between PdtMatcher::FST and the  StdVectorPdt of PDTInfo
   typedef fst::ParenMatcher< StdVectorFst > FstMatcher;
   typedef fst::ParenMatcher< StdVectorPdt > PdtMatcher;
   FstMatcher matcher1(fst, MATCH_OUTPUT);
   PdtMatcher matcher2(pdt, MATCH_INPUT);
-  fst::TripoliComposeFilter<FstMatcher, PdtMatcher> tripoliFilter(fst, pdt, pdtInfo, matcher1, matcher2);
+  fst::TripoliComposeFilter<FstMatcher, PdtMatcher> tripoliFilter(fst, pdt, pdtInfo, &matcher1, &matcher2);
   // where are the parens?
 
 //  fst::script::VectorFstClass ofst(ifst->ArcType());
