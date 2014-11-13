@@ -36,6 +36,7 @@
 #include "readers.h"
 #include <fst/script/fst-class.h>
 #include <fst/script/compile-impl.h>
+#include <fst/extensions/pdt/compose.h>
 
 DEFINE_bool(acceptor, false, "Input in acceptor format");
 DEFINE_string(arc_type, "standard", "Output arc type");
@@ -65,7 +66,6 @@ int main(int argc, char **argv) {
   const char *states = argv[6];
   const char *out_name = argv[7];
 
-
   istream *fstIstrm = new ifstream(inputFilename);
   istream *pdtIstrm = new ifstream(pdtFilename);
   const SymbolTable *isyms = 0, *osyms = 0, *ssyms = 0;
@@ -90,7 +90,6 @@ int main(int argc, char **argv) {
   StdVectorPdt pdt = pdtCompiler.Pdt();
   cout << "PDT compiled..." << endl;
 
-
   // Read the state file
   ifstream stateFile(states);
   vector<fst::StateInfo> stateInfo = read_states(stateFile);
@@ -98,14 +97,16 @@ int main(int argc, char **argv) {
 
   // Read the grammar file
   fst::Grammar *grammar = fst::ReadGrammar(symbols, rules, labels);
-  // TODO This appears to cause a bus error 10
-  // cout << "Grammar read..." << endl;
 
-  // TODO And this is the offending line for the type error...
   fst::PDTInfo<StdVectorPdt> pdtInfo(*grammar, pdt, stateInfo);
 
-  // TODO Invoke TripoliComposeFilter, which takes the linear chain, the pdt above, the pdt info above, and two matchers (multi-epsilon matchers?)
-  // fst::TripoliComposeFilter tripoliFilter(void, pdt, void);
+  // So the problem is a mismatch between PdtMatcher::FST and the  StdVectorPdt of PDTInfo
+  typedef fst::ParenMatcher< StdVectorFst > FstMatcher;
+  typedef fst::ParenMatcher< StdVectorPdt > PdtMatcher;
+  FstMatcher matcher1(fst, MATCH_OUTPUT);
+  PdtMatcher matcher2(pdt, MATCH_INPUT);
+  fst::TripoliComposeFilter<FstMatcher, PdtMatcher> tripoliFilter(fst, pdt, pdtInfo, matcher1, matcher2);
+  // where are the parens?
 
 //  fst::script::VectorFstClass ofst(ifst->ArcType());
   fst::ComposeOptions composeOpts(true, fst::AUTO_FILTER); // Your filter goes here
