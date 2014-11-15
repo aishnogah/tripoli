@@ -262,6 +262,7 @@ private:
   set<RuleId> disallowed_;
 
   static TripoliFilterState no_state_;
+
   template <class M1, class M2> friend class TripoliComposeFilter;
 };
 
