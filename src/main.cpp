@@ -64,7 +64,8 @@ int main(int argc, char **argv) {
   const char *symbols = argv[4];
   const char *rules = argv[5];
   const char *states = argv[6];
-  const char *out_name = argv[7];
+  const char *parens = argv[7];
+  const char *out_name = argv[8];
 
   istream *fstIstrm = new ifstream(inputFilename);
   istream *pdtIstrm = new ifstream(pdtFilename);
@@ -98,6 +99,12 @@ int main(int argc, char **argv) {
   // Read the grammar file
   fst::Grammar *grammar = fst::ReadGrammar(symbols, rules, labels);
 
+  // Read the parentheses file
+  vector<pair<int64, int64> > parentheses;
+  fst::ReadLabelPairs(parens, &parentheses, false);
+  cout << "Parentheses read..." << endl;
+  // TODO check parenthesis order matches what we need
+
   fst::PDTInfo<StdVectorPdt> pdtInfo(*grammar, pdt, stateInfo);
 
   typedef fst::ParenMatcher< StdVectorFst > FstMatcher;
@@ -112,5 +119,4 @@ int main(int argc, char **argv) {
   // TODO Duh the second argument is wrong
   // fst::script::Compose(*ifst, *ifst, &ofst, composeOpts);
   // ofst.Write(out_name);
-
 }

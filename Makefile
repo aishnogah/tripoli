@@ -15,7 +15,7 @@ TST_SOURCES := $(shell find test -name '*.cpp')
 TST_OBJECTS := $(filter-out $(MAINS),$(TST_SOURCES:.cpp=.o))
 
 OBJECTS := $(SRC_OBJECTS) $(TST_OBJECTS)
-RUN_CMD := src/main data/input.txt data/pdt.txt data/arc-labels.txt data/grammar-symbols.txt data/rules.txt data/states.txt output.fst
+RUN_CMD := src/main data/input.txt data/pdt.txt data/arc-labels.txt data/grammar-symbols.txt data/rules.txt data/states.txt data/parens.txt output.fst
 
 all: $(TARGET)
 
