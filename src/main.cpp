@@ -116,6 +116,6 @@ int main(int argc, char **argv) {
   ComposeFstImplOptions<FstMatcher, PdtMatcher, TripoliComposeFilter<FstMatcher, PdtMatcher> > composeOpts(cacheOpts, &matcher1, &matcher2, &tripoliFilter);
 
   MutableFst<Arc> *ofst;
-  *ofts = ComposeFst<Arc>(fst, &pdt, &composeOpts);
+  opts = ComposeFst<Arc>(fst, &pdt, &composeOpts);
   ofst->Write(out_name);
 }
