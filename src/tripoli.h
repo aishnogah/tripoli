@@ -393,8 +393,20 @@ public:
   typedef M1 Matcher1;
   typedef M2 Matcher2;
   typedef TripoliFilterState FilterState;
+  typedef typename Arc::Weight Weight;
 
-  TripoliComposeFilter(const FST &fst, const PDT &pdt, const PDTInfo<PDT> &pdt_info, M1 *matcher1 = 0, M2 *matcher2 = 0)
+  /* Nonce-constructor required to satisfy templatization requirements in compose.h. Do NOT use! */
+  TripoliComposeFilter(const FST &fst, const PDT &pdt, M1 *matcher1 = 0, M2 *matcher2 = 0)
+          : matcher1_(matcher1 ? matcher1 : new M1(fst, MATCH_OUTPUT)),
+            matcher2_(matcher2 ? matcher2 : new M2(pdt, MATCH_INPUT)),
+            fst_(matcher1_->GetFst()),
+            pdt_(matcher2_->GetFst()),
+            pdt_info_((PDTInfo<PDT>*)0),
+            s1_(kNoStateId),
+            s2_(kNoStateId),
+            f_(kNoStateId) { throw "Do not call this constructor."; }
+
+  TripoliComposeFilter(const FST &fst, const PDT &pdt, PDTInfo<PDT> *pdt_info, M1 *matcher1 = 0, M2 *matcher2 = 0)
           : matcher1_(matcher1 ? matcher1 : new M1(fst, MATCH_OUTPUT)),
             matcher2_(matcher2 ? matcher2 : new M2(pdt, MATCH_INPUT)),
             fst_(matcher1_->GetFst()),
@@ -408,7 +420,7 @@ public:
           : matcher1_(filter.matcher1_->Copy(safe)),
             matcher2_(filter.matcher2_->Copy(safe)),
             fst_(matcher1_->GetFst()),
-            pdt_(matcher2_->GetFSt()),
+            pdt_(matcher2_->GetFst()),
             pdt_info_(filter.pdt_info_),
             s1_(kNoStateId),
             s2_(kNoStateId),
@@ -429,15 +441,17 @@ public:
     f_ = f;
   }
 
+  void FilterFinal(Weight *, Weight *) const {};
+
   const FilterState FilterArc(Arc *arc1, Arc *arc2) const {
     RuleId r = arc2->rule;
     switch (r) {
       case LEXICAL_BACKOFF_ARC: {
-        set<RuleId> &disallowed = pdt_info_.GetContextRuleSet(s2_);
+        set<RuleId> &disallowed = pdt_info_->GetContextRuleSet(s2_);
         return f_.GenerateAddState(s2_, disallowed);
       }
       case SYNTACTIC_BACKOFF_ARC: {
-        set<RuleId> &disallowed = pdt_info_.GetUnigramRuleSet(arc2->ilabel);
+        set<RuleId> &disallowed = pdt_info_->GetUnigramRuleSet(arc2->ilabel);
         return f_.GenerateAddLabel(arc2->ilabel, disallowed);
       }
       case DUMMY_ARC:
@@ -447,18 +461,24 @@ public:
     if (f_.Contains(r))
       return TripoliFilterState::NoState();
 
-    if (!pdt_info_.grammar.RuleCanReach(r, arc1->olabel))
+    if (!pdt_info_->grammar.RuleCanReach(r, arc1->olabel))
       return TripoliFilterState::NoState();
 
     return f_;
   }
+
+M1 *GetMatcher1() { return matcher1_; }
+M2 *GetMatcher2() { return matcher2_; }
+
+/* TODO Not sure if this is correct */
+uint64 Properties(uint64 props) const { return props; }
 
 private:
   Matcher1 *matcher1_;
   Matcher2 *matcher2_;
   const FST &fst_;
   const PDT &pdt_;
-  const PDTInfo<PDT> &pdt_info_;
+  PDTInfo<PDT> *pdt_info_;
   StateId s1_;
   StateId s2_;
   TripoliFilterState f_;

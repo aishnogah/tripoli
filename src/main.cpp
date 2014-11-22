@@ -52,7 +52,7 @@ DEFINE_bool(allow_negative_labels, false, "Allow negative labels (not recommende
 
 typedef typename fst::RuleArc<fst::StdArc> Arc;
 typedef typename fst::VectorFst<Arc> StdVectorPdt;
-typedef fst::ParenMatcher< StdVectorFst > FstMatcher;
+typedef fst::ParenMatcher< VectorFst<Arc> > FstMatcher;
 typedef fst::ParenMatcher< StdVectorPdt > PdtMatcher;
 
 int main(int argc, char **argv) {
@@ -84,10 +84,10 @@ int main(int argc, char **argv) {
   bool okeep = false;
   bool allow_negative_labels = false;
 
-  fst::FstCompiler<StdArc> fstCompiler(*fstIstrm, inputFilename, isyms, osyms, ssyms, accep, ikeep, okeep, allow_negative_labels);
+  fst::FstCompiler<Arc> fstCompiler(*fstIstrm, inputFilename, isyms, osyms, ssyms, accep, ikeep, okeep, allow_negative_labels);
   fst::PdtCompiler<Arc> pdtCompiler(*pdtIstrm, pdtFilename, isyms, osyms, ssyms, accep, ikeep, okeep, allow_negative_labels);
 
-  const StdVectorFst fst = fstCompiler.Fst();
+  const VectorFst<Arc> fst = fstCompiler.Fst();
   cout << "input FST compile..." << endl;
 
   StdVectorPdt pdt = pdtCompiler.Pdt();
@@ -112,10 +112,9 @@ int main(int argc, char **argv) {
   CacheOptions cacheOpts;
   FstMatcher matcher1(fst, MATCH_OUTPUT);
   PdtMatcher matcher2(pdt, MATCH_INPUT);
-  TripoliComposeFilter<FstMatcher, PdtMatcher> tripoliFilter(fst, pdt, pdtInfo, &matcher1, &matcher2);
+  TripoliComposeFilter<FstMatcher, PdtMatcher> tripoliFilter(fst, pdt, &pdtInfo, &matcher1, &matcher2);
   ComposeFstImplOptions<FstMatcher, PdtMatcher, TripoliComposeFilter<FstMatcher, PdtMatcher> > composeOpts(cacheOpts, &matcher1, &matcher2, &tripoliFilter);
 
-  MutableFst<Arc> *ofst;
-  opts = ComposeFst<Arc>(fst, &pdt, &composeOpts);
-  ofst->Write(out_name);
+  ComposeFst<Arc> ofst(fst, pdt, composeOpts);
+  ofst.Write(out_name);
 }
