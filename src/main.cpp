@@ -115,6 +115,14 @@ int main(int argc, char **argv) {
   TripoliComposeFilter<FstMatcher, PdtMatcher> tripoliFilter(fst, pdt, &pdtInfo, &matcher1, &matcher2);
   ComposeFstImplOptions<FstMatcher, PdtMatcher, TripoliComposeFilter<FstMatcher, PdtMatcher> > composeOpts(cacheOpts, &matcher1, &matcher2, &tripoliFilter);
 
-  ComposeFst<Arc> ofst(fst, pdt, composeOpts);
-  ofst.Write(out_name);
+    ComposeFst<Arc> cfst(fst, pdt, composeOpts);
+    for (StateIterator<ComposeFst<Arc>> siter(cfst); !siter.Done(); siter.Next()) {
+  	  Arc::StateId state_id = siter.Value();
+  	  for (ArcIterator<ComposeFst<Arc>> aiter(cfst, state_id); !aiter.Done(); aiter.Next()) {
+  		  Arc edge = aiter.Value();
+  	  	  cout << state_id << " " << edge.nextstate << " " << edge.ilabel << " " << edge.olabel << " " << edge.weight << endl;
+  	  }
+    }
+
+  // delete grammar;
 }
