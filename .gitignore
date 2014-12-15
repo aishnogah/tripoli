@@ -45,3 +45,8 @@ openfst-lib/
 .settings
 *.swp
 .gdb_history
+GPATH
+GRTAGS
+GTAGS
+.gdbinit
+.breakpoints

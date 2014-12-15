@@ -72,16 +72,20 @@ public:
             labels_to_symbols_(labels_to_symbols) {
 
     if (max_term <= 0)
-      invalid_argument("max_term should be > 0");
+      throw invalid_argument("max_term should be > 0");
     if (max_preterm != max_term*2)
-      invalid_argument("max_preterm should be 2 * max_term");
+      throw invalid_argument("max_preterm should be 2 * max_term");
     if (max_nonterm <= max_preterm)
-      invalid_argument("max_nonterm should be > max_preterm");
+      throw invalid_argument("max_nonterm should be > max_preterm");
 
     SetRules(rules);
 
     for (Symbol pt = max_term + 1; pt <= max_preterm; ++pt) {
       Symbol t = ToTerm(pt);
+      if(symbol_reach_.size() <= pt) {
+        symbol_reach_.resize(pt+1);
+        symbol_reach_[pt] = vector<ReachType>(t+1);
+      }
       symbol_reach_[pt][t] = REACH_YES;
     }
   }
@@ -104,7 +108,7 @@ public:
 
   bool SymbolCanReach(Symbol nonterm, Symbol term) {
     if (IsTerm(nonterm) || !IsTerm(term))
-      invalid_argument("SymbolCanReach: nonterm must not be term, and term must be term");
+      throw invalid_argument("SymbolCanReach: nonterm must not be term, and term must be term");
 
     ReachType cached = symbol_reach_[nonterm][term];
     if (cached != REACH_UNKNOWN)
@@ -128,21 +132,24 @@ public:
   }
 
   void ValidateRule(Rule rule) {
+    // TODO This is incorrect because it does not toss away the first element of the rule, which is just an id!
     if (rule.size() < 2)
-      invalid_argument("invalid rule: must have at least two symbols");
+      throw invalid_argument("invalid rule: must have at least two symbols");
     if (rule.size() == 2 && IsPreterm(rule[0]) && IsTerm(rule[1])) { // unary terminal production
       Symbol pterm = rule[0];
       Symbol term = rule[1];
       if (ToTerm(pterm) != term)
-        invalid_argument("invalid rule: preterm and term do not match in unary production");
-    }
-    else {  // not a unary terminal production
+        throw invalid_argument("invalid rule: preterm and term do not match in unary production");
+    } else {
+      // not a unary terminal production
       Rule::const_iterator it = rule.begin();
-    if (!IsNonterm(*it))
-      invalid_argument("invalid rule: non-unary production must have non-terminal left-hand symbol");
-    for (++it; it != rule.end(); ++it)
-      if (!(IsNonterm(*it) || IsPreterm(*it)))
-        invalid_argument("invalid rule: non-unary production must not have terminal right-hand symbols");
+      // ignore the rule id
+      it++;
+      if (!IsNonterm(*it))
+        throw invalid_argument("invalid rule: non-unary production must have non-terminal left-hand symbol");
+      for (++it; it != rule.end(); ++it)
+        if (!(IsNonterm(*it) || IsPreterm(*it)))
+          throw invalid_argument("invalid rule: non-unary production must not have terminal right-hand symbols");
     }
   }
 
@@ -152,9 +159,12 @@ public:
     for (ssize_t i = 0; i < rules.size(); ++i) {
       Rule rule = rules[i];
       ValidateRule(rule);
-      Symbol lsym = rule[0];
-      Symbol rsym = rule[1];
+      Symbol lsym = rule[1];
+      Symbol rsym = rule[2];
       vector<Symbol> repls = replacement_symbols_[lsym];
+      // Replacement symbols is a vector of the leftmost righthand
+      // side symbols indexed by lefthand side symbol, so if we
+      // encounter a new one as we iterate through rules, we add it
       if (std::find(repls.begin(), repls.end(), rsym) == repls.end())
         repls.push_back(rsym);
     }
@@ -166,6 +176,8 @@ private:
   Symbol max_nonterm_; // assume min_nonterm_ is max_preterm_ + 1
   vector<Symbol> labels_to_symbols_;
   vector<Rule> rules_;
+  // TODO is this a source of trouble? vector is not a sparse
+  // representation, but the symbol count could climb quite high
   vector<vector<ReachType> > symbol_reach_;
   vector<vector<Symbol> > replacement_symbols_;
   // replacement_symbols_[s] is a vector of symbols which appear as the left-most symbol of the RHS of a production from s
@@ -298,6 +310,13 @@ public:
             state_info_(state_info) {
 
     StateId state = 0;
+    // In states.cpp, read_states uses -1 as the absence of a value
+    // But no_value was originally 0, probably a bug
+    int no_value = -1;
+    int start_state = -2;
+    // We will use -2 as the special start symbol
+    // And we will check that only one such state is so annotated
+    bool start_state_found = false;
     for (vector<StateInfo>::const_iterator it = state_info.begin();
          it != state_info.end();
          ++it, ++state) {
@@ -305,34 +324,43 @@ public:
 
       switch (si.tag) {
         case TRIGRAM_STATE:
-          if (!(grammar.IsTerm(si.fst) && grammar.IsTerm(si.snd)))
-            invalid_argument("invalid StateInfo for trigram state: " + std::to_string(state));
+          if(si.fst == start_state && si.snd == start_state) {
+            if(start_state_found)
+              throw invalid_argument("Duplicate start states found: " + std::to_string(state));
+            else
+              start_state_found = true;
+          } else if (!((grammar.IsTerm(si.fst) || si.fst == start_state) && grammar.IsTerm(si.snd))) {
+            throw invalid_argument("invalid StateInfo for trigram state: " + std::to_string(state));
+          }
           collect_rules(state);
           state_index_[si] = state;
           break;
 
         case BIGRAM_STATE:
-          if (!(grammar.IsTerm(si.fst) && si.snd == 0))
-            invalid_argument("invalid StateInfo for bigram state: " + std::to_string(state));
+          if (!(grammar.IsTerm(si.fst) && si.snd == no_value))
+            throw invalid_argument("invalid StateInfo for bigram state: " + std::to_string(state));
           collect_rules(state);
           state_index_[si] = state;
           break;
 
         case UNIGRAM_STATE:
-          if (!(si.fst == 0 && si.snd == 0))
-            invalid_argument("invalid StateInfo for unigram state: " + std::to_string(state));
+          if (!(si.fst == no_value && si.snd == no_value))
+            throw invalid_argument("invalid StateInfo for unigram state: " + std::to_string(state));
           collect_unigram_rules(state);
           state_index_[si] = state;
           break;
 
         case DUMMY_STATE:
-          if (!(si.fst == 0 && si.snd == 0))
-            invalid_argument("invalid StateInfo for dummy state: " + std::to_string(state));
+          if (!(si.fst == no_value && si.snd == no_value))
+            throw invalid_argument("invalid StateInfo for dummy state: " + std::to_string(state));
           break;
         case PORTAL_STATE:
-          if (!(si.fst == 0 && si.snd == 0))
-            invalid_argument("invalid StateInfo for portal state: " + std::to_string(state));
-      }
+          if (!(si.fst == no_value && si.snd == no_value))
+            throw invalid_argument("invalid StateInfo for portal state: " + std::to_string(state));
+      }  
+    }
+    if(!start_state_found) {
+      throw new invalid_argument("No start state (trigram) found.");
     }
   }
 

@@ -62,6 +62,7 @@ bool ReadNumberedStrings(const string& filename, vector<string> *strings) {
     int64 n;
     ss >> n;
     if (n <= prevn) return false;
+    prevn++;
     for (; prevn < n; ++prevn) {
       strings->push_back("");
     }
@@ -112,18 +113,21 @@ inline bool ReadLabelFile(const string& filename, vector<Symbol> *labels_to_symb
   labels_to_symbols->push_back(-1);
   for (size_t i = 1; i < labels.size(); ++i) {
     string label = labels[i];
-    if (label[0] != '+' && label[0] != '-') {
+    if ((label[0] != '+' && label[0] != '-') || label == "+" || label == "-" || label == "++" || label == "--" || label == "+=" || label == "-=") {
       if (i > max_term)
         return false;
       labels_to_symbols->push_back(i);
     }
     else {
-      if (i <= max_term) return false;
+      if (i <= max_term)
+    	  return false;
       char *sym_str = const_cast<char*>(strpbrk(label.c_str(), "P"));
-      if (!sym_str) return false;
+      if (!sym_str)
+    	  return false;
       bool err;
-      Symbol sym = StrToInt64(sym_str, filename, i, false, &err);
-      if (err) return false;
+      Symbol sym = StrToInt64(sym_str+1, filename, i, false, &err);
+      if (err)
+    	  return false;
       labels_to_symbols->push_back(sym);
     }
   }
@@ -137,11 +141,11 @@ Grammar *ReadGrammar(const string symbolfile, const string rulefile, const strin
 	vector<Rule> rules;
 	vector<Symbol> labels_to_symbols;
 	if (!ReadIntVectors(rulefile, &rules))
-		invalid_argument("cannot read rule file");
+		throw invalid_argument("cannot read rule file");
 	if (!ReadSymbolFile(symbolfile, &max_term, &max_preterm, &max_nonterm))
-		invalid_argument("cannot read grammar-symbols file");
+		throw invalid_argument("cannot read grammar-symbols file");
 	if (!ReadLabelFile(labelfile, &labels_to_symbols, max_term))
-		invalid_argument("cannot read labels file");
+		throw invalid_argument("cannot read labels file");
 	return new Grammar(max_term, max_preterm, max_nonterm, rules, labels_to_symbols);
 }
 

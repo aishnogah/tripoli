@@ -1,5 +1,5 @@
 CXX := g++
-CXXFLAGS := -g -std=c++11 # -Wall
+CXXFLAGS := -ggdb3 -std=c++11 # -Wall
 LIB := -L/usr/local/lib -lfst -ldl -lfstscript
 INC := -I/usr/local/include
 
@@ -15,7 +15,11 @@ TST_SOURCES := $(shell find test -name '*.cpp')
 TST_OBJECTS := $(filter-out $(MAINS),$(TST_SOURCES:.cpp=.o))
 
 OBJECTS := $(SRC_OBJECTS) $(TST_OBJECTS)
-RUN_CMD := src/main data/input.txt data/pdt.txt data/arc-labels.txt data/grammar-symbols.txt data/rules.txt data/states.txt data/parens.txt output.fst
+FST := data/input.txt
+# FST := examples/linear.txt
+PDT := data/pdt.txt
+# PDT := examples/translate.txt
+RUN_CMD := src/main $(FST) $(PDT) data/arc-labels.txt data/grammar-symbols.txt data/rules.txt data/states.txt data/parens.txt output.fst
 
 all: $(TARGET)
 
@@ -38,12 +42,15 @@ run: $(TARGET)
 	$(RUN_CMD)
 
 debug: $(TARGET)
-	gdb --args $(RUN_CMD)
-	
+	gdb $(GDB_FLAGS) --args $(RUN_CMD)
+
 test: $(TEST_TARGET)
 	$<
 
 clean:
 	rm -rf $(OBJECTS) $(MAINS) $(TARGETS) $(patsubst %,%.dSYM,$(MAINS)) 
 
-.PHONY: run test clean debug
+valgrind:
+	valgrind $(RUN_CMD)
+
+.PHONY: run test clean debug valgrind
